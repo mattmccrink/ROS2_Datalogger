@@ -1,0 +1,7 @@
+<launch>
+        <node pkg="serial_server" exec="serial_node"/>
+        <include file="$(find-pkg-share mavros)/launch/px4.launch">
+                <arg name="fcu_url" value="/dev/ttyACM0:57600"/>
+                <arg name="gcs_url" value="udp://@10.42.0.222"/>
+        </include>
+</launch>
