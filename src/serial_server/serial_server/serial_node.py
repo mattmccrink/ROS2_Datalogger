@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description='Short sample app')
 # corresponding value should be stored in the `algo` 
 # field, and using a default value if the argument 
 # isn't given
-parser.add_argument('--port', action="store", dest='port', default='/dev/ttyUSB0')
+parser.add_argument('--port', action="store", dest='port', default='/dev/ttyAMA0')
 parser.add_argument('--baud', action="store", dest='baud', default=115200)
 parser.add_argument('--timeout', action="store", dest='timeout', default=0.5)
 parser.add_argument('--rate', action="store", dest='rate', default=0.001)
@@ -51,19 +51,25 @@ class SerialNode(Node):
         self.serial_port.reset_input_buffer()
         self.serial_port.reset_output_buffer()	
         self.timer = self.create_timer(args.rate, self.timer_callback)
-
+        
+        char_to_send = "S" #Send start command if needed
+        self.serial_port.write(char_to_send.encode())
+            
     def timer_callback(self):
-        while (self.serial_port.in_waiting > 32):
-          header = self.serial_port.read_until(b'>>>')[-3:]
-          if (header == (b">>>")):
+        while (self.serial_port.in_waiting > 8):
+          header = self.serial_port.read_until(b'!S')[-2:]
+          if (header == (b"!S")):
             ser_mes = SerialMessage()
             ser_mes.message_id = ord(self.serial_port.read(1)) #change from hex byte to number
-            ser_mes.bytes_2_read = struct.unpack("<h",self.serial_port.read(2))[0] #Grab first element of tuple
-            ser_mes.chk_sum = struct.unpack("BB",self.serial_port.read(2))
-            ser_mes.time_boot_ms = struct.unpack("i",self.serial_port.read(4))[0]
+            ser_mes.bytes_2_read = ord(self.serial_port.read(1)) #change from hex byte to number
             ser_mes.as_values = self.serial_port.read(ser_mes.bytes_2_read)
             ser_mes.as_values = struct.unpack("h"*int(ser_mes.bytes_2_read/2),ser_mes.as_values)
             message_process(self,ser_mes)
+            
+    def shutdown_hook(self):
+       char_to_send = "X"
+       self.serial_port.write(char_to_send.encode())      
+       print("All done!")            
             
 def message_process(self,ser_mes):
 
@@ -73,14 +79,12 @@ def message_process(self,ser_mes):
             self.publisher_voltage = self.create_publisher(Voltage, 'Voltage', 10)
         msg = Voltage()
         msg.timestamp = self.get_clock().now().to_msg()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.voltage = ser_mes.as_values  # or process as needed
         self.publisher_voltage.publish(msg)
     case 1:             
         if self.publisher_current is None:
             self.publisher_current = self.create_publisher(Current, 'Current', 10)
         msg = Current()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.current = ser_mes.as_values  # or process as needed
         self.publisher_current.publish(msg)
@@ -88,7 +92,6 @@ def message_process(self,ser_mes):
         if self.publisher_rpm is None:
             self.publisher_rpm = self.create_publisher(RPM, 'RPM', 10)
         msg = RPM()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.rpm = ser_mes.as_values  # or process as needed
         self.publisher_rpm.publish(msg)
@@ -96,7 +99,6 @@ def message_process(self,ser_mes):
         if self.publisher_thrust is None:
             self.publisher_thrust = self.create_publisher(Thrust, 'Thrust', 10)
         msg = Thrust()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.thrust = ser_mes.as_values  # or process as needed
         self.publisher_thrust.publish(msg)
@@ -104,7 +106,6 @@ def message_process(self,ser_mes):
         if self.publisher_strain is None:
             self.publisher_strain = self.create_publisher(Strain, 'Strain', 10)
         msg = Strain()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.strain = ser_mes.as_values  # or process as needed
         self.publisher_strain.publish(msg)
@@ -114,7 +115,6 @@ def message_process(self,ser_mes):
             char_to_send = "Z"
             self.serial_port.write(char_to_send.encode())
         msg = Pressure()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.pressure = ser_mes.as_values  # or process as needed
         self.publisher_pressure.publish(msg)
@@ -122,7 +122,6 @@ def message_process(self,ser_mes):
         if self.publisher_temperature is None:
             self.publisher_temperature = self.create_publisher(Temperature, 'Temperature', 10)
         msg = Temperature()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.temperature = ser_mes.as_values  # or process as needed
         self.publisher_temperature.publish(msg)
@@ -130,7 +129,6 @@ def message_process(self,ser_mes):
         if self.publisher_adc is None:
             self.publisher_adc = self.create_publisher(ADC, 'ADC', 10)
         msg = ADC()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.adc = ser_mes.as_values  # or process as needed
         self.publisher_adc.publish(msg)
@@ -138,18 +136,23 @@ def message_process(self,ser_mes):
         if self.publisher_encoder is None:
             self.publisher_encoder = self.create_publisher(Encoder, 'Encoder', 10)
         msg = Encoder()
-        msg.time_boot_ms = ser_mes.time_boot_ms
         msg.timestamp = self.get_clock().now().to_msg()
         msg.encoder = ser_mes.as_values  # or process as needed
         self.publisher_encoder.publish(msg)
 
-
 def main(args=None):
     rclpy.init(args=args)
     serial_node = SerialNode()
-    rclpy.spin(serial_node)
-    serial_node.destroy_node()
-    rclpy.shutdown()
+    
+    try: 
+      rclpy.spin(serial_node)
+    except KeyboardInterrupt:
+      pass
+
+    finally:
+      serial_node.shutdown_hook()
+      serial_node.destroy_node()
+      #rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
