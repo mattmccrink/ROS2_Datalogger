@@ -6,7 +6,7 @@ import argparse
 import time
 
 from std_msgs.msg import Int16MultiArray  # or a custom message type
-from serial_interfaces.msg import Voltage, Current, RPM, Thrust, Strain, Pressure, Temperature, ADC, Encoder
+from serial_interfaces.msg import Voltage, Current, RPM, Thrust, Strain, Pressure, Temperature, ADC, Encoder, Control
 from builtin_interfaces.msg import Time
 
 ## Version 1.0
@@ -46,6 +46,7 @@ class SerialNode(Node):
         self.publisher_temperature = None
         self.publisher_adc = None
         self.publisher_encoder = None
+        self.publisher_control = None
 
         self.serial_port = serial.Serial(args.port, args.baud, timeout=args.timeout)
         self.serial_port.reset_input_buffer()
@@ -139,6 +140,13 @@ def message_process(self,ser_mes):
         msg.timestamp = self.get_clock().now().to_msg()
         msg.encoder = ser_mes.as_values  # or process as needed
         self.publisher_encoder.publish(msg)
+    case 9: 
+        if self.publisher_control is None:
+            self.publisher_control = self.create_publisher(Control, 'Control', 10)
+        msg = Control()
+        msg.timestamp = self.get_clock().now().to_msg()
+        msg.control = ser_mes.as_values  # or process as needed
+        self.publisher_control.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)

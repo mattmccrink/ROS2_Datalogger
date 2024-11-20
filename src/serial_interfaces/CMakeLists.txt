@@ -25,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Temperature.msg"
   "msg/Encoder.msg"
   "msg/ADC.msg"
+  "msg/Control.msg"
   DEPENDENCIES builtin_interfaces std_msgs
 
  )
