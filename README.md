@@ -15,3 +15,5 @@ No error checking is performed to maximize transfer speed
 
 Run ROS node as follows:
 ros2 run serial_server serial_node &
+
+Install script for ROS2 Humble on Ubuntu 22.04 included in src directory. Likely to change as packages mature, so take with a grain of salt.
