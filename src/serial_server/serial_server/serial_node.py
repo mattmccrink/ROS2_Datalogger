@@ -6,7 +6,7 @@ import argparse
 import time
 
 from std_msgs.msg import Int16MultiArray  # or a custom message type
-from serial_interfaces.msg import Voltage, Current, RPM, Thrust, Strain, Pressure, Temperature, ADC, Encoder, Control
+from serial_interfaces.msg import Voltage, Current, RPM, Thrust, Strain, Pressure, Temperature, ADC, Encoder, Control, Qrex
 from builtin_interfaces.msg import Time
 
 ## Version 1.0
@@ -47,6 +47,7 @@ class SerialNode(Node):
         self.publisher_adc = None
         self.publisher_encoder = None
         self.publisher_control = None
+        self.publisher_qrex = None
 
         self.serial_port = serial.Serial(args.port, args.baud, timeout=args.timeout)
         self.serial_port.reset_input_buffer()
@@ -63,9 +64,11 @@ class SerialNode(Node):
             ser_mes = SerialMessage()
             ser_mes.message_id = ord(self.serial_port.read(1)) #change from hex byte to number
             ser_mes.bytes_2_read = ord(self.serial_port.read(1)) #change from hex byte to number
+            ser_mes.time_boot_ms = struct.unpack("i",self.serial_port.read(4))[0]
             ser_mes.as_values = self.serial_port.read(ser_mes.bytes_2_read)
             ser_mes.as_values = struct.unpack("h"*int(ser_mes.bytes_2_read/2),ser_mes.as_values)
             message_process(self,ser_mes)
+
             
     def shutdown_hook(self):
        char_to_send = "X"
@@ -147,6 +150,17 @@ def message_process(self,ser_mes):
         msg.timestamp = self.get_clock().now().to_msg()
         msg.control = ser_mes.as_values  # or process as needed
         self.publisher_control.publish(msg)
+    case 10: 
+        if self.publisher_qrex is None:
+            self.publisher_qrex = self.create_publisher(Qrex, 'Qrex', 10)
+        msg = Qrex()
+        msg.timestamp = self.get_clock().now().to_msg()
+        msg.time_boot_ms = ser_mes.time_boot_ms
+        msg.voltage = ser_mes.as_values[0:4]  # or process as needed
+        msg.current = ser_mes.as_values[4:8]  # or process as needed
+        msg.thrust = ser_mes.as_values[8:12]  # or process as needed
+        msg.rpm = ser_mes.as_values[12:16]  # or process as needed                        
+        self.publisher_qrex.publish(msg)        
 
 def main(args=None):
     rclpy.init(args=args)
